@@ -5,7 +5,7 @@ from scipy.interpolate import interp1d
 from scipy.signal import resample
 
 # Load the dataset
-file_name = "HC101_SelfPace.csv"
+file_name = "New_Data/HC101_SelfPace.csv"
 patient = file_name.split("_")[0]
 df = pd.read_csv(file_name)
 plt.plot(df["R Foot Pressure"])

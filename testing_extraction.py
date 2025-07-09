@@ -11,7 +11,7 @@ for file in os.listdir("./New_Data"):
     new_file = os.path.join("./New_Data", file)
     print(new_file)
     df = pd.read_csv(new_file,low_memory=False)
-    if "RTotalForce" not in df.columns:
+    if "LTotalForce" not in df.columns:
         continue
     metadata = pd.read_csv("CONTROLS - Demographic+Clinical - datasetV1.csv")
     # print(metadata[metadata.columns[8]])
@@ -54,17 +54,17 @@ for file in os.listdir("./New_Data"):
         ended_idx = 0
         found_step = False
 
-        for i in range(0, len(walk_df["RTotalForce"]) - 1):
+        for i in range(0, len(walk_df["LTotalForce"]) - 1):
             # Checks if a step started
-            if not stepStarted and pd.notna(walk_df.iloc[i]["RTotalForce"]) and pd.notna(walk_df.iloc[i+1]["RTotalForce"]) and \
-               walk_df.iloc[i]["RTotalForce"] < threshold and walk_df.iloc[i+1]["RTotalForce"] >= threshold:
+            if not stepStarted and pd.notna(walk_df.iloc[i]["LTotalForce"]) and pd.notna(walk_df.iloc[i+1]["LTotalForce"]) and \
+               walk_df.iloc[i]["LTotalForce"] < threshold and walk_df.iloc[i+1]["LTotalForce"] >= threshold:
                 stepStarted = True
                 started_idx = i
                 ended_idx = i
                 found_step = True
             # Checks if a step ended
-            elif stepStarted and pd.notna(walk_df.iloc[i]["RTotalForce"]) and pd.notna(walk_df.iloc[i+1]["RTotalForce"]) and \
-                 walk_df.iloc[i]["RTotalForce"] < threshold and walk_df.iloc[i+1]["RTotalForce"] < threshold:
+            elif stepStarted and pd.notna(walk_df.iloc[i]["LTotalForce"]) and pd.notna(walk_df.iloc[i+1]["LTotalForce"]) and \
+                 walk_df.iloc[i]["LTotalForce"] < threshold and walk_df.iloc[i+1]["LTotalForce"] < threshold:
                 break
             elif stepStarted:
                 ended_idx += 1
@@ -75,24 +75,24 @@ for file in os.listdir("./New_Data"):
         new_df = walk_df.iloc[started_idx:ended_idx+2].reset_index(drop=True)
 
         if max_length >= len(new_df) >= min_length:
-            if not new_df["RTotalForce"].isna().any():
-                r_force.append(new_df["RTotalForce"].values / weight)
-            if not new_df["Rinsole:Acc_X"].isna().any():
-                r_acc_x.append(new_df["Rinsole:Acc_X"].values)
-            if not new_df["Rinsole:Acc_Y"].isna().any():
-                r_acc_y.append(new_df["Rinsole:Acc_Y"].values)
-            if not new_df["Rinsole:Acc_Z"].isna().any():
-                r_acc_z.append(new_df["Rinsole:Acc_Z"].values)
-            if not new_df["Rinsole:Gyr_X"].isna().any():
-                r_gyr_x.append(new_df["Rinsole:Gyr_X"].values)
-            if not new_df["Rinsole:Gyr_Y"].isna().any():
-                r_gyr_y.append(new_df["Rinsole:Gyr_Y"].values)
-            if not new_df["Rinsole:Gyr_Z"].isna().any():
-                r_gyr_z.append(new_df["Rinsole:Gyr_Z"].values)
-            if not new_df["RCoP_X"].isna().any():
-                r_cop_x.append(new_df["RCoP_X"].values)
-            if not new_df["RCoP_Y"].isna().any():
-                r_cop_y.append(new_df["RCoP_Y"].values)
+            if not new_df["LTotalForce"].isna().any():
+                r_force.append(new_df["LTotalForce"].values / weight)
+            if not new_df["Linsole:Acc_X"].isna().any():
+                r_acc_x.append(new_df["Linsole:Acc_X"].values)
+            if not new_df["Linsole:Acc_Y"].isna().any():
+                r_acc_y.append(new_df["Linsole:Acc_Y"].values)
+            if not new_df["Linsole:Acc_Z"].isna().any():
+                r_acc_z.append(new_df["Linsole:Acc_Z"].values)
+            if not new_df["Linsole:Gyr_X"].isna().any():
+                r_gyr_x.append(new_df["Linsole:Gyr_X"].values)
+            if not new_df["Linsole:Gyr_Y"].isna().any():
+                r_gyr_y.append(new_df["Linsole:Gyr_Y"].values)
+            if not new_df["Linsole:Gyr_Z"].isna().any():
+                r_gyr_z.append(new_df["Linsole:Gyr_Z"].values)
+            if not new_df["LCoP_X"].isna().any():
+                r_cop_x.append(new_df["LCoP_X"].values)
+            if not new_df["LCoP_Y"].isna().any():
+                r_cop_y.append(new_df["LCoP_Y"].values)
 
         walk_df = walk_df.iloc[ended_idx+2:].reset_index(drop=True)
         if len(walk_df) <= 100:

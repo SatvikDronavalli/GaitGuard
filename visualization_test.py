@@ -38,4 +38,9 @@ gyr_y_data = gyr_y_data[:2381,:-1]
 gyr_z_data = pd.read_csv("right_gyr_z_dataset.csv").to_numpy()
 gyr_z_data = gyr_z_data[:2381,:-1]
 new_x = np.stack([acc_x_data,acc_y_data,acc_z_data,cop_x_data,cop_y_data,gyr_x_data,gyr_y_data,gyr_z_data],-1)
+
+X_train, X_test, y_train, y_test = train_test_split(
+    new_x, y_vals, test_size=0.2, random_state=42, stratify=y_vals
+)
+print(len(X_train),len(X_test))
 print(new_x.shape)

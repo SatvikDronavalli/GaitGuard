@@ -56,8 +56,9 @@ features = scaler.fit_transform(features)
 
 # --- Step 5: Split and Train SVM ---
 X_train, X_test, y_train, y_test = train_test_split(
-    features, y, test_size=0.2, stratify=y
+    features, y_vals, test_size=0.2, random_state=42, stratify=y_vals
 )
+
 param_grid = {
     'C': [0.1, 1, 10, 100], 
     'gamma': ['scale', 0.01, 0.1, 1],

@@ -3,7 +3,7 @@ import numpy as np
 from sklearn.model_selection import train_test_split
 import pandas as pd
 
-'''
+
 with open('right_cop_y_dataset.csv') as file:
     lines = file.readlines()
     curves = [list(map(float, line.strip().split(",")[:-1])) for line in lines[1:] if int(float(line.strip().split(",")[-1])) == 0]
@@ -15,7 +15,7 @@ with open('right_cop_y_dataset.csv') as file:
     plt.plot(mean_curve, color='black', linewidth=2, label='Label 0 Mean')
     plt.plot(mean_curve2, color='blue', linewidth=2, label='Label 1 Mean')
     plt.legend()
-    plt.show() '''
+    plt.show()
 
 grf_data = pd.read_csv("right_grf_dataset.csv").to_numpy()
 y_vals = grf_data[:,-1]

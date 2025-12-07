@@ -196,16 +196,41 @@ void setup() {
 
   ism330dhcx.configInt1(false, false, true); // accelerometer DRDY on INT1
   ism330dhcx.configInt2(false, true, false); // gyro DRDY on INT2
-  
+
 }
+
+struct IMUPacket {
+  float ax,ay,az;
+  float gx,gy,gz;
+  uint32_t t;
+};
+
+
 int i = 0;
+static uint32_t last = 0;
 void loop() {
   //  /* Get a new normalized sensor event */
   sensors_event_t accel;
   sensors_event_t gyro;
   sensors_event_t temp;
+  IMUPacket pkt;
+
+
+  if (micros() - last >= 5000) { // 200 Hz
+      last += 5000;
+      ism330dhcx.getEvent(&accel, &gyro, &temp);
+    pkt.ax = accel.acceleration.x;
+    pkt.ay = accel.acceleration.y;
+    pkt.az = accel.acceleration.z;
+    pkt.gx = gyro.gyro.x;
+    pkt.gy = gyro.gyro.y;
+    pkt.gz = gyro.gyro.z;
+    pkt.t = millis();
+    pCharacteristic->setValue((uint8_t*)&pkt, sizeof(pkt));
+    pCharacteristic->notify();
+  }
   /**
-  ism330dhcx.getEvent(&accel, &gyro, &temp);
+
 
   Serial.print("\t\tTemperature ");
   Serial.print(temp.temperature);
@@ -229,12 +254,12 @@ void loop() {
   Serial.print(gyro.gyro.z);
   Serial.println(" radians/s ");
   Serial.println(); **/
-
+  /**
   delay(1000);
   char buf[32];
   snprintf(buf,sizeof(buf),"Iteration %d", i++);
   pCharacteristic->setValue(buf);
-  pCharacteristic->notify();
+  pCharacteristic->notify(); */
   /**
   Serial.print("Notified value: ");
   Serial.println(buf);

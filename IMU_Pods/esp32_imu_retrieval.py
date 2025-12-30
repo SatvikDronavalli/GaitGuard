@@ -1,22 +1,15 @@
-# SPDX-FileCopyrightText: 2020 ladyada for Adafruit Industries
-# SPDX-License-Identifier: MIT
-
-"""
-This example scans for any BLE advertisements and prints one advertisement and one scan response
-from every device found.
-"""
-
-# BLERadio: https://github.com/adafruit/Adafruit_CircuitPython_BLE/blob/main/adafruit_ble/__init__.py
-
 import asyncio
 from bleak import BleakScanner, BleakClient
+import matplotlib.pyplot as plt
 import struct
-
+from collections import deque
 
 CHAR_UUID_IMU = "beb5483e-36e1-4688-b7f5-ea07361b26a8"
-CHAR_UUID_LIPO = None
-PACKET_FMT = "<ffffffI" # 6 floats for 6DoF IMU + uint32 for timestamp
+PACKET_FMT = "<ffffffI"
 PACKET_SIZE = struct.calcsize(PACKET_FMT)
+
+MAX_POINTS = 500
+ax_buf = deque(maxlen=MAX_POINTS)
 
 async def main():
     devices = await BleakScanner.discover()
@@ -36,12 +29,39 @@ async def main():
 
         def handler(sender, data):
             if len(data) == PACKET_SIZE:
-                ax,ay,az,gx,gy,gz,t = struct.unpack(PACKET_FMT, data)
-
-                # Rotation unit: rad/s, Acceleration unit: gy
-                print(f"A=({ax:.2f},{ay:.2f},{az:.2f})  G=({gx:.2f},{gy:.2f},{gz:.2f})  t={t}")
+                accel_x, ay, az, gx, gy, gz, t = struct.unpack(PACKET_FMT, data)
+                ax_buf.append(accel_x)
 
         await client.start_notify(CHAR_UUID_IMU, handler)
-        await asyncio.sleep(60)
+
+        # ----- Matplotlib setup -----
+        plt.ion()
+        fig, ax_plot = plt.subplots()
+        line, = ax_plot.plot([], [])
+        ax_plot.set_xlabel("Sample")
+        ax_plot.set_ylabel("ax")
+        ax_plot.set_title("Live ax from GaitGuard")
+        plt.show(block=False)
+
+        duration = 60.0
+        dt = 0.05
+        steps = int(duration / dt)
+
+        for _ in range(steps):
+            if ax_buf:
+                x_data = range(len(ax_buf))
+                y_data = list(ax_buf)
+
+                line.set_data(x_data, y_data)
+                ax_plot.relim()
+                ax_plot.autoscale_view()
+
+                fig.canvas.draw()
+                plt.pause(0.001)
+
+            await asyncio.sleep(dt)
+
+        print("Stopping notify")
+        await client.stop_notify(CHAR_UUID_IMU)
 
 asyncio.run(main())

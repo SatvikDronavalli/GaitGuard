@@ -4,36 +4,28 @@ import matplotlib.pyplot as plt
 import math
 from scipy.signal import butter, filtfilt
 
-'''
-with open('HC100_TUG.csv') as file:
-    reader_object = csv.DictReader(file)
-    idx = 0
-    # arr = np.array(list(map(float, [row['acc_tot'] for row in reader_object])))
-    # Calc magnitude: 'ACC_X(m/(s^2))', 'ACC_Y(m/(s^2))', 'ACC_Z(m/(s^2))'
-    for reader in reader_object:
-        print(reader.keys())
-        break
-    arr = np.array([float(row['LowerBack_Gyr_X']) for row in reader_object])
-    for row in reader_object:
-        a_x = float(row['ACC_X(m/(s^2))'])
-        a_y = float(row['ACC_Y(m/(s^2))'])
-        a_z = float(row['ACC_Z(m/(s^2))'])
-        magnitude = math.sqrt(a_x**2 + a_y**2 + a_z**2)
-        arr.append(magnitude)
-    arr = np.array(arr)
-    arr = arr-arr.mean()
-    arr /= arr.std()
-    plt.plot(arr)
-    plt.show() '''
-
-# 6 hz accordign to this paper: https://www.mdpi.com/2076-3417/15/4/2177
-
 # TODO: Tune with fourier analysis, maybe determine if necessary?
-def butter_bandpass(x, fs, highcut=20, order=4):
+def butter_bandpass(x, fs, upper=20, order=4):
     nyq = 0.5 * fs
-    high = highcut / nyq
-    b, a = butter(order,high, btype="lowpass")
+    upper_bound = upper / nyq
+    b, a = butter(order,upper_bound, btype="lowpass")
     return filtfilt(b, a, x)
+
+def state_detector(gyr_x_data):
+    # Initially tried 1 Hz, too much fluctuation in walking + turning signals made it somewhat unreliable, 0.5 Hz works better
+    gyr_x_data = butter_bandpass(gyr_x_data,100,upper=0.5) # Aggressive filter to cleanly isolate turn
+    max_idx = gyr_x_data.argmax()
+    max_val = gyr_x_data[max_idx]
+    THRESHOLDING_CONSTANT = 0.15 # Tune by averaging Gyr_X's
+    threshold = THRESHOLDING_CONSTANT*max_val
+    possible_bounds = np.where(gyr_x_data >= threshold)[0]
+    left_threshold = possible_bounds[0]
+    right_threshold = possible_bounds[-1]
+    walking_until_turn = np.arange(0, left_threshold)
+    turn = np.arange(left_threshold,right_threshold+1)
+    walking_after_turn = np.arange(right_threshold+1,gyr_x_data.size)
+    return gyr_x_data[walking_until_turn],gyr_x_data[turn],gyr_x_data[walking_after_turn]
+
 
 with open('HS_2_2_processed_data.txt') as file:
     lines = file.readlines()
@@ -56,8 +48,7 @@ with open('HS_2_2_processed_data.txt') as file:
                 dataset[keys[i_temp]].append(num)
                 i_temp += 1
         idx += 1
-    array = butter_bandpass(dataset["LB_Gyr_X"], 100)
-    plt.plot(array)
-    plt.show()
-    # print(dataset.keys())
-    # print(dataset)
+    array = butter_bandpass(dataset["LB_Gyr_X"], 100) # Reduce noise
+    pre_turn, turn, post_turn = state_detector(array)
+    # plt.plot(array)
+    # plt.show()

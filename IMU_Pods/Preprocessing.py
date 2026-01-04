@@ -40,9 +40,12 @@ for t in dataset_dir.iterdir():
                 with open(metadata, 'r') as file:
                     data = json.load(file)
                     curr_vga = data['visualGaitAssessment']
+                    start = min(data["leftGaitEvents"][0][1],data["rightGaitEvents"][0][1])
+                    end = max(data["leftGaitEvents"][-1][1],data["rightGaitEvents"][-1][1])
+                    turn_bounds = data["uturnBoundaries"]
                     if curr_vga == 'Not evaluated':
                         break
-                #TODO: move gyroscope data to .npy files
+
                 lb_imu_data_x = butter_lowpass(imu_data["LB_Gyr_X"],100)
                 lb_imu_data_y = butter_lowpass(imu_data["LB_Gyr_Y"], 100)
                 lb_imu_data_z = butter_lowpass(imu_data["LB_Gyr_Z"], 100)
@@ -55,9 +58,12 @@ for t in dataset_dir.iterdir():
                              "Unstable_Gait": unstable_gait, # Patient level, not trial level
                              "Trial_Number": trial_idx,
                              "Condition": condition.name,
+                             "Gait_Start": start,
+                             "Gait_End": end,
+                             "UTurn_Start": turn_bounds[0],
+                             "UTurn_End": turn_bounds[1],
                              "Data_Path": output_path
                              })
-
                 trial_idx += 1
 
             # add stuff here

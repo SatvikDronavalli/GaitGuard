@@ -1,1 +1,5 @@
 *.csv filter=lfs diff=lfs merge=lfs -text
+# Keep consistent line endings for data-like text files
+*.txt text eol=lf
+*.tsv text eol=lf
+*.csv text eol=lf

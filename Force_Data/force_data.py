@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 from pathlib import Path
+import matplotlib.pyplot as plt
 
 #-------------GRF--------------
 GRF_right_path = Path(__file__).parent / "GRF_F_V_PRO_right.csv"

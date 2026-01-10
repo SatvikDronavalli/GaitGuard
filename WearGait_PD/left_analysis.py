@@ -5,12 +5,12 @@ from scipy.interpolate import interp1d
 from scipy.signal import resample
 import os
 valid = 0
-for file in os.listdir("./pd_gait"):
+for file in os.listdir("../pd_gait"):
     if not file.endswith(".csv"):
         continue
     # Load the dataset
     patient = file.split("_")[0]
-    new_file = os.path.join("./pd_gait", file)
+    new_file = os.path.join("../pd_gait", file)
     print(new_file)
     df = pd.read_csv(new_file,low_memory=False)
     metadata = pd.read_csv("PD - Demographic+Clinical - datasetV1.csv").iloc[1:]
@@ -117,7 +117,7 @@ for file in os.listdir("./pd_gait"):
     r_cop_y = [pd.DataFrame(normalize_to_101_points(c).reshape(1,-1),columns=columns) for c in r_cop_y]
     for r in r_force:
         r['Fall Risk'] = 1
-        write_header =  os.path.getsize("right_grf_dataset.csv") == 0
+        write_header = os.path.getsize("right_grf_dataset.csv") == 0
         r.to_csv("right_grf_dataset.csv",mode='a',header=write_header,index=False)
     for r in r_acc_x:
         r['Fall Risk'] = 1
@@ -152,4 +152,4 @@ for file in os.listdir("./pd_gait"):
         write_header = os.path.getsize("right_cop_y_dataset.csv") == 0
         r.to_csv("right_cop_y_dataset.csv", mode='a', header=write_header, index=False)
 
-print(f"{valid} of {len(os.listdir('./pd_gait'))} processed")
+print(f"{valid} of {len(os.listdir('../pd_gait'))} processed")

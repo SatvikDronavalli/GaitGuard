@@ -1,16 +1,11 @@
-from Force_Data.force_data import final_x_train,final_y_train
 import pandas as pd
 # GPU path: C:\Users\Satvik\AppData\Local\Temp\CUDA
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Input, Dense, Conv1D, Flatten, Dropout
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
-from sklearn.model_selection import train_test_split
-from visualization_test import X_train,y_train
+from WearGait_PD.visualization_test import X_train,y_train
 
-
-
-from tensorflow.keras.models import load_model
 # Define the model for GRF data
 model = Sequential([
     Input(shape=(101,8)),

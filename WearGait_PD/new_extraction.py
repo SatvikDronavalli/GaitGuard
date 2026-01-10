@@ -5,22 +5,22 @@ from scipy.interpolate import interp1d
 from scipy.signal import resample
 import os
 
-for file in os.listdir("./New_Data"):
+for file in os.listdir("../New_Data"):
     # Load the dataset
     patient = file.split("_")[0]
-    new_file = os.path.join("./New_Data", file)
+    new_file = os.path.join("../New_Data", file)
     print(new_file)
     df = pd.read_csv(new_file,low_memory=False)
-    if "LTotalForce" not in df.columns:
+    if "RTotalForce" not in df.columns:
         continue
     metadata = pd.read_csv("CONTROLS - Demographic+Clinical - datasetV1.csv")
     # print(metadata[metadata.columns[8]])
     weight = float(metadata.loc[metadata[metadata.columns[0]] == patient][metadata.columns[8]].tolist()[0])*9.81
     # Remove 'Standing' periods
     df = df[df["GeneralEvent"] != "Standing"].reset_index(drop=True)
+    new_df = df.iloc[:df[df["GeneralEvent"] == "Turn"].index[0]]
     # Identify all sections where the subject is walking straight (i.e., 'Walk' events only)
     walk_df = df[df["GeneralEvent"] == "Walk"].reset_index(drop=True)
-
     # Parameters for step detection
     threshold = 50
     min_length = 30
@@ -73,7 +73,9 @@ for file in os.listdir("./New_Data"):
             break
 
         new_df = walk_df.iloc[started_idx:ended_idx+2].reset_index(drop=True)
-
+        print(f"start: {started_idx}, end: {ended_idx}")
+        plt.plot(new_df["Linsole:Acc_X"])
+        plt.show()
         if max_length >= len(new_df) >= min_length:
             if not new_df["LTotalForce"].isna().any():
                 r_force.append(new_df["LTotalForce"].values / weight)
@@ -93,6 +95,7 @@ for file in os.listdir("./New_Data"):
                 r_cop_x.append(new_df["LCoP_X"].values)
             if not new_df["LCoP_Y"].isna().any():
                 r_cop_y.append(new_df["LCoP_Y"].values)
+            if not new_df[""]
 
         walk_df = walk_df.iloc[ended_idx+2:].reset_index(drop=True)
         if len(walk_df) <= 100:
@@ -109,6 +112,7 @@ for file in os.listdir("./New_Data"):
     r_gyr_z = [pd.DataFrame(normalize_to_101_points(c).reshape(1,-1),columns=columns) for c in r_gyr_z]
     r_cop_x = [pd.DataFrame(normalize_to_101_points(c).reshape(1,-1),columns=columns) for c in r_cop_x]
     r_cop_y = [pd.DataFrame(normalize_to_101_points(c).reshape(1,-1),columns=columns) for c in r_cop_y]
+    '''
     for r in r_force:
         r['Fall Risk'] = 0
         write_header =  os.path.getsize("right_grf_dataset.csv") == 0
@@ -144,4 +148,4 @@ for file in os.listdir("./New_Data"):
     for r in r_cop_y:
         r['Fall Risk'] = 0
         write_header = os.path.getsize("right_cop_y_dataset.csv") == 0
-        r.to_csv("right_cop_y_dataset.csv", mode='a', header=write_header, index=False)
+        r.to_csv("right_cop_y_dataset.csv", mode='a', header=write_header, index=False)'''

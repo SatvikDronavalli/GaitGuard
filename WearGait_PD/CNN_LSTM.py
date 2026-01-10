@@ -34,7 +34,7 @@ history = model.fit(
 )
 
 # Save training history
-pd.DataFrame(history.history).to_csv('AI_Models/CNN/training_history_cnn_lstm.csv', index=False)
+pd.DataFrame(history.history).to_csv('../AI_Models/CNN/training_history_cnn_lstm.csv', index=False)
 
 # Visualize model
 #plot_model(model, to_file='cnn_lstm_model.png', show_shapes=True, show_layer_names=True)

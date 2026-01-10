@@ -1,6 +1,6 @@
 import pandas as pd
 import matplotlib.pyplot as plt
-df = pd.read_csv("New_Data/HC101_SelfPace.csv")
+df = pd.read_csv("../New_Data/HC101_SelfPace.csv")
 df = df[df["GeneralEvent"] != 'Standing']
 metadata = pd.read_csv("CONTROLS - Demographic+Clinical - datasetV1.csv")
 df_copy = df[df["GeneralEvent"] == 'Walk']

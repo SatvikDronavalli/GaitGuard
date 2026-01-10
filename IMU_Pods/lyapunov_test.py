@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from scipy.signal import periodogram
 from scipy.spatial.distance import cdist
 from sklearn.linear_model import LinearRegression
-from TUG_data_visualization import array
+from TUG_data_visualization import array, pre_turn, turn, post_turn
 
 # Rosenstein lyapunov approximation implementation, adapted from the Logical Errors blog (https://logicalerrors.wordpress.com/2020/02/22/estimating-the-first-lyapunov-exponent-in-r-using-rosensteins-method/)
 def logistic(x, mu):
@@ -13,9 +13,7 @@ def logistic(x, mu):
 #TODO: Later experiment with multiple channels for higher accuracy (try calculating angular velocity magnitudes for now?)
 #Dataset: https://springernature.figshare.com/articles/dataset/A_Dataset_of_Clinical_Gait_Signals_with_Wearable_Sensors_from_Healthy_Neurological_and_Orthopedic_Cohorts/28806086?file=53704514
 
-#TODO: Add phase separation
-
-x_obs = array # generate_trajectory(mu=4.0, x0=0.1, length=500)
+x_obs = post_turn
 J = 1 # TODO: read Rosenstein paper to determine empirical derivation methods for J (autocorrection function, FFT)
 m = 2 # TODO: Experimentally test for m
 M = len(x_obs) - (m - 1) * J
@@ -36,7 +34,6 @@ Future extension could be Short Time Fourier Transform method from: https://www.
 '''
 
 
-
 def mean_period(ts):
     freqs, psd = periodogram(ts)
     w = psd / psd.sum()
@@ -55,6 +52,7 @@ def get_nearest_neighbors(X, theiler):
 
 theiler = int(mean_period(x_obs))
 neighbors = get_nearest_neighbors(X, theiler)
+
 def mean_log_divergence(X, neighbors, t_end=25):
     M = len(X)
     mean_log = []
@@ -86,6 +84,7 @@ def kneedle_alg(x, y, direction="increasing", curve="concave", smooth_window=0):
     y = np.asarray(y, dtype=float).ravel()
     n = x.size
     x_min, x_max = x[0], x[-1]
+    # Normalize so "chord" becomes y=x for simplicity
     x_n = (x - x_min) / (x_max - x_min)
     y_min, y_max = np.min(y), np.max(y)
     y_n = (y - y_min) / (y_max - y_min)
@@ -98,11 +97,18 @@ def kneedle_alg(x, y, direction="increasing", curve="concave", smooth_window=0):
     inner = np.arange(1, n - 1)
 
     knee_sorted_idx = inner[np.argmax(scores[inner])]
+    print(int(knee_sorted_idx))
     return int(knee_sorted_idx)
 
 optimal_time = kneedle_alg(time,mean_log_dist)
 reg = LinearRegression().fit(time[:optimal_time].reshape(-1,1), mean_log_dist[:optimal_time])
 lyapunov = reg.coef_[0]
-# "Lyapunov" during turning: 0.246
 
 print("Estimated Lyapunov exponent:", lyapunov)
+
+'''
+Healthy patient 2 data: 
+Pre-turn lyapunov : 0.7592870606069958
+Turn lyapunov: 0.27887419427935234??
+Post-turn lyapunov: 0.7856932895471012
+'''

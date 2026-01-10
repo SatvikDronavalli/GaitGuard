@@ -92,7 +92,7 @@ def dataset_preprocessing(file):
                 i_temp += 1
         idx += 1
     return dataset
-
+'''
 smth = 'HS_2_2_processed_data.txt'
 with open('HS_2_2_processed_data.txt') as file:
     dataset = dataset_preprocessing(Path(smth))
@@ -103,3 +103,4 @@ with open('HS_2_2_processed_data.txt') as file:
     post_turn = array[post_turn]
     # plt.plot(array)
     # plt.show()
+'''

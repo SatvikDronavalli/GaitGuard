@@ -54,6 +54,7 @@ for t in dataset_dir.iterdir():
                 output_path.parent.mkdir(parents=True, exist_ok=True)
                 np.save(output_path, stacked_data)
                 rows.append({"Patient": patient,
+                             "Trial_Name": trial.name,
                              "Current_VGA": curr_vga,
                              "Unstable_Gait": unstable_gait, # Patient level, not trial level
                              "Trial_Number": trial_idx,

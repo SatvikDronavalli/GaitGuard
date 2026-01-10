@@ -37,7 +37,11 @@ for c in file_df.itertuples(index=False):
     walk1 = norm_and_resample(arr[c.Gait_Start:c.UTurn_Start],2000)
     turn = norm_and_resample(arr[c.UTurn_Start:c.UTurn_End+1],2000)
     walk2 = norm_and_resample(arr[c.UTurn_End+1:c.Gait_End],2000)
-
+    np.save(c.Data_Path, {
+        "pre_walk": walk1,
+        "turn": turn,
+        "post_walk": walk2,
+     }, allow_pickle=True)
     '''
     
     lb_gyr_x = arr[:, 0]
@@ -72,5 +76,5 @@ Segmentation tests (not necessary right away lol):
 Initial Error rate: 54.35%
 Error rate after removing endpoints from bound consideration: 23.29%
 '''
-
+print("success")
 # print(f"Bad split percent {round((bad/total) * 100,2)}%")

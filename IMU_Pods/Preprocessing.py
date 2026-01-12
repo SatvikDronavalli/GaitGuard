@@ -32,7 +32,6 @@ for t in dataset_dir.iterdir():
                 total_vga += float(data['visualGaitAssessment'])
                 trial_amt += 1
 
-            unstable_gait = False if (no_vga or round(total_vga / trial_amt) < 2) else True
             trial_idx = 1
             for trial in item.iterdir():
                 imu_data = dataset_preprocessing(list(trial.iterdir())[2])
@@ -44,8 +43,9 @@ for t in dataset_dir.iterdir():
                     end = max(data["leftGaitEvents"][-1][1],data["rightGaitEvents"][-1][1])
                     turn_bounds = data["uturnBoundaries"]
                     if curr_vga == 'Not evaluated':
+                        print(f"{patient} didn't have a VGA evaluation")
                         break
-
+                    curr_vga = float(curr_vga)
                 lb_imu_data_x = butter_lowpass(imu_data["LB_Gyr_X"],100)
                 lb_imu_data_y = butter_lowpass(imu_data["LB_Gyr_Y"], 100)
                 lb_imu_data_z = butter_lowpass(imu_data["LB_Gyr_Z"], 100)
@@ -56,7 +56,7 @@ for t in dataset_dir.iterdir():
                 rows.append({"Patient": patient,
                              "Trial_Name": trial.name,
                              "Current_VGA": curr_vga,
-                             "Unstable_Gait": unstable_gait, # Patient level, not trial level
+                             "Unstable_Gait": 1 if curr_vga >= 2 else 0, # Trial level
                              "Trial_Number": trial_idx,
                              "Condition": condition.name,
                              "Gait_Start": start,

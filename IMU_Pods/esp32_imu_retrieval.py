@@ -9,7 +9,7 @@ PACKET_FMT = "<ffffffI"
 PACKET_SIZE = struct.calcsize(PACKET_FMT)
 
 MAX_POINTS = 500
-ax_buf = deque(maxlen=MAX_POINTS)
+gx_buf = deque(maxlen=MAX_POINTS)
 
 async def main():
     devices = await BleakScanner.discover()
@@ -30,17 +30,17 @@ async def main():
         def handler(sender, data):
             if len(data) == PACKET_SIZE:
                 accel_x, ay, az, gx, gy, gz, t = struct.unpack(PACKET_FMT, data)
-                ax_buf.append(accel_x)
+                gx_buf.append(gx)
 
         await client.start_notify(CHAR_UUID_IMU, handler)
 
         # ----- Matplotlib setup -----
         plt.ion()
-        fig, ax_plot = plt.subplots()
-        line, = ax_plot.plot([], [])
-        ax_plot.set_xlabel("Sample")
-        ax_plot.set_ylabel("ax")
-        ax_plot.set_title("Live ax from GaitGuard")
+        fig, gx_plot = plt.subplots()
+        line, = gx_plot.plot([], [])
+        gx_plot.set_xlabel("Sample")
+        gx_plot.set_ylabel("gx")
+        gx_plot.set_title("Live gx from GaitGuard")
         plt.show(block=False)
 
         duration = 60.0
@@ -48,13 +48,13 @@ async def main():
         steps = int(duration / dt)
 
         for _ in range(steps):
-            if ax_buf:
-                x_data = range(len(ax_buf))
-                y_data = list(ax_buf)
+            if gx_buf:
+                x_data = range(len(gx_buf))
+                y_data = list(gx_buf)
 
                 line.set_data(x_data, y_data)
-                ax_plot.relim()
-                ax_plot.autoscale_view()
+                gx_plot.relim()
+                gx_plot.autoscale_view()
 
                 fig.canvas.draw()
                 plt.pause(0.001)

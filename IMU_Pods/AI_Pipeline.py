@@ -3,7 +3,7 @@ from pathlib import Path
 from sklearn.model_selection import GroupShuffleSplit
 from sklearn.svm import SVC
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Input, Dense, Conv1D, Flatten, Dropout, MaxPooling1D, GlobalAveragePooling1D
+from tensorflow.keras.layers import Input, Dense, Conv1D, Flatten, Dropout, MaxPooling1D, GlobalAveragePooling1D, LSTM
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
 from sklearn.metrics import classification_report,make_scorer, recall_score, roc_auc_score
@@ -11,6 +11,7 @@ from sklearn.model_selection import train_test_split, GridSearchCV
 import matplotlib.pyplot as plt
 import pandas as pd
 import tensorflow as tf
+import statistics
 
 
 curr_path = Path.cwd() / "Processed_Data"
@@ -94,30 +95,49 @@ gss = GroupShuffleSplit(n_splits=1, train_size=.8, random_state=42)
 train_idx, test_idx = next(gss.split(X, y, groups=df['Patient']))
 X_train, X_test = X[train_idx, :], X[test_idx, :]
 y_train, y_test = y.iloc[train_idx].to_numpy(), y.iloc[test_idx].to_numpy()
-
 '''
-X = X.to_numpy()
-print(X.shape)
-X = np.stack([np.stack((i[0],i[1],i[2]),axis=1) for i in X], axis=0)
-print(X.shape)
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.2, random_state=42, stratify=y
-)
-'''
+# ----------------------WearGait-PD CNN---------------------------
 
-print(y_train.shape)
-
-# Define the model for GRF data
-'''
 model = Sequential([ # Modify architecture, more convolution
     Input(shape=(2000,9)),
-    Conv1D(filters=32, kernel_size=11, activation='relu'),
+    Conv1D(filters=32, kernel_size=9, activation='relu'),
     Dropout(0.2),
     Flatten(),
     Dense(64, activation='relu'),
     Dense(1, activation='sigmoid')  # Binary classification output
-]) '''
+])
 
+
+
+# Compile the model
+model.compile(optimizer=Adam(learning_rate=0.001), loss="binary_crossentropy", metrics=['accuracy'])
+
+# Define checkpoints and early stopping
+checkpoint = ModelCheckpoint('updated_fall_risk.keras', save_best_only=True, monitor='loss', mode='min')
+early_stopping = EarlyStopping(monitor='loss', patience=5, restore_best_weights=True)
+
+# Train the model with GRF data and labels
+history = model.fit(
+    X_train,
+    y_train,  # Use actual labels here
+    epochs=200,
+    batch_size=32,
+    callbacks=[checkpoint, early_stopping]
+)
+
+
+y_pred_probs = model.predict(X_test)  # Get probabilities (output of sigmoid layer)
+print(roc_auc_score(y_test, y_pred_probs))
+y_pred = (y_pred_probs > 0.5).astype(int)  # Convert probabilities to binary (0 or 1) using a threshold of 0.5
+y_true = y_test  # Ground truth labels
+# print(len(y_true))
+# Calculate metrics
+print(classification_report(y_true=y_true,y_pred=y_pred))
+'''
+
+
+
+# -------------------------New triple-conv CNN-SVM----------------------------
 model = Sequential([
     Input(shape=(2000, 9)),
 
@@ -155,65 +175,53 @@ checkpoint = ModelCheckpoint('updated_fall_risk.keras', save_best_only=True, mon
 early_stopping = EarlyStopping(monitor='pr_auc', patience=5, restore_best_weights=True)
 
 # Train the model with GRF data and labels
-history = model.fit(
-    X_train,
-    y_train,  # Use actual labels here
-    epochs=200,
-    batch_size=32,
-    callbacks=[checkpoint, early_stopping]
-)
+recall = []
+auc = []
+for _  in range(5):
+    history = model.fit(
+        X_train,
+        y_train,  # Use actual labels here
+        epochs=200,
+        batch_size=32,
+        callbacks=[checkpoint, early_stopping],
+        verbose = 0
+    )
 
-feature_extractor = tf.keras.Model(
-    inputs=model.input,
-    outputs=model.layers[-2].output
-)
+    feature_extractor = tf.keras.Model(
+        inputs=model.input,
+        outputs=model.layers[-2].output
+    )
 
-features_train = feature_extractor.predict(X_train, verbose=0)
-features_test = feature_extractor.predict(X_test, verbose=0)
+    features_train = feature_extractor.predict(X_train, verbose=0)
+    features_test = feature_extractor.predict(X_test, verbose=0)
 
-param_grid = {
-    'C': [0.1, 1, 10, 100],
-    'gamma': ['scale', 0.01, 0.1, 1],
-    'kernel': ['rbf']
-}
+    param_grid = {
+        'C': [0.1, 1, 10, 100],
+        'gamma': ['scale', 0.01, 0.1, 1],
+        'kernel': ['rbf']
+    }
 
-grid_search = GridSearchCV(SVC(), param_grid, cv=5, scoring='recall')
-grid_search.fit(features_train, y_train)
+    grid_search = GridSearchCV(SVC(), param_grid, cv=5, scoring='recall')
+    grid_search.fit(features_train, y_train)
 
-svm = grid_search.best_estimator_  # handles imbalance
-svm.fit(features_train, y_train)
+    svm = grid_search.best_estimator_  # handles imbalance
+    svm.fit(features_train, y_train)
 
-# --- Step 6: Evaluate ---
-y_pred = svm.predict(features_test)
-y_true = y_test
-print(roc_auc_score(y_test, y_pred))
-print(classification_report(y_true=y_true,y_pred=y_pred))
+    # --- Step 6: Evaluate ---
+    y_pred = svm.predict(features_test)
+    y_true = y_test
+    recall.append(recall_score(y_true=y_true, y_pred=y_pred))
+    auc.append(roc_auc_score(y_test, y_pred))
+    # print(classification_report(y_true=y_true,y_pred=y_pred))
 
-'''
-# Compile the model
-model.compile(optimizer=Adam(learning_rate=0.001), loss="binary_crossentropy", metrics=['accuracy'])
+print(f"Avg recall: {round(sum(recall) / 5, 2)}")
+print(f"Avg AUC: {round(sum(auc) / 5, 3)}")
+print(f"Recall std: {statistics.stdev(recall)}")
+print(f"AUC std: {statistics.stdev(auc)}")
 
-# Define checkpoints and early stopping
-checkpoint = ModelCheckpoint('updated_fall_risk.keras', save_best_only=True, monitor='loss', mode='min')
-early_stopping = EarlyStopping(monitor='loss', patience=5, restore_best_weights=True)
+# print(round(avg_roc / 5, 4))
+# print(round(avg_pos_recall / 5, 2)) '''
 
-# Train the model with GRF data and labels
-history = model.fit(
-    X_train,
-    y_train,  # Use actual labels here
-    epochs=200,
-    batch_size=32,
-    callbacks=[checkpoint, early_stopping]
-) '''
-
-'''
-y_pred_probs = model.predict(X_test)  # Get probabilities (output of sigmoid layer)
-print(roc_auc_score(y_test, y_pred_probs))
-y_pred = (y_pred_probs > 0.5).astype(int)  # Convert probabilities to binary (0 or 1) using a threshold of 0.5
-y_true = y_test  # Ground truth labels
-print(len(y_true))
-# Calculate metrics
-print(classification_report(y_true=y_true,y_pred=y_pred)) '''
 
 '''
 v1, WearGait-PD CNN architecture (AUC: 0.615, True recall: 0.42)
@@ -230,21 +238,9 @@ v10, kernel size 9 (AUC: 0.749, True recall: 0.58)
 v11, new CNN architecture with three convolutional layers, instead of one (AUC: 0.711, True recall: 0.41) # I think it overfit
 - Using dense layers make the CNN's overfit, since they both have around 4 million parameters
 v12, kept the same three conv architecture, removed dense layers and attached svm to it (AUC: 0.690, True recall: 0.52)
-'''
-
-
-
-
-'''
-Kernel Size 61
-              precision    recall  f1-score   support
-
-           0       0.71      0.77      0.74       143
-           1       0.62      0.55      0.59       100
-
-    accuracy                           0.68       243
-   macro avg       0.67      0.66      0.66       243
-weighted avg       0.67      0.68      0.68       243
-
-
+v13, same architecture as before but only included 10 meter walk tests in dataset (Avg AUC: 0.762, Avg True recall: 0.77)
+v14, same architecture, but with turn directions normalized for better consistency (Avg AUC: 0.780, Avg True recall: 0.78) # might undo this for easier testing with sensors
+v15, same architecture, but switched out Global Average Pooling with an LSTM (AUC: 0.576, True recall: 0.42) # overfit A LOT
+v16, same architecture, but stacked the Global Average Pooling layer on top of the LSTM (AUC: 0.728, True recall: 0.69)
+v17, tried initial WearGait-PD architecture with kernel size 9 and the data processing changes (AUC: 0.736, True recall: 0.62)
 '''

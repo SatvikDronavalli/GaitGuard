@@ -42,10 +42,21 @@ for t in dataset_dir.iterdir():
                 else:
                     protocol[data["protocol"]][0] += 1
                     protocol[data["protocol"]][1] += gait_instability
+            '''
             if turn == 'left': #TODO: Measure and count directions based on lower back yaw (gyr_x) peak direction
                 plt.plot(lb_imu_data_x)
-                plt.show()
+                plt.show() '''
             # add stuff here
 
 print(laterality)
 print(protocol)
+'''
+{'right': [130, 61], None: [5, 3], 'left': [5, 2]}
+{'10.0m - uturn - 10.0m': [96, 44], 
+'8.5m - uturn - 8.5m': [32, 15], 
+'6.0m - uturn - 6.0m': [6, 2], 
+'6.5m - uturn - 6.5m': [1, 1], 
+'7.25m - uturn - 7.25m': [2, 2], 
+'7.5m - uturn - 7.5m': [2, 1], 
+'5.5m - uturn - 5.5m': [1, 1]}
+'''

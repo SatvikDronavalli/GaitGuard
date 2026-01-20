@@ -75,6 +75,7 @@ time = np.arange(t_end)
 plt.plot(time, mean_log_dist)
 plt.xlabel("Time")
 plt.ylabel("Mean log distance")
+plt.title("Lyapunov approximation graph")
 plt.show()
 
 # Determines "knee" of time vs mean log distance graph to maximize the length of line of best fit while keeping it linear

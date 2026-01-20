@@ -3,6 +3,7 @@ import json
 import numpy as np
 from pathlib import Path
 from TUG_data_visualization import dataset_preprocessing, butter_lowpass
+import matplotlib.pyplot as plt
 
 DATASET_LOCATION = "C:/Users/Satvik/Downloads" # Change this as necessary
 healthy_dir = Path(f"{DATASET_LOCATION}/dataset/dataset/data/healthy")
@@ -10,6 +11,13 @@ neuro_dir = Path(f"{DATASET_LOCATION}/dataset/dataset/data/neuro")
 ortho_dir = Path(f"{DATASET_LOCATION}/dataset/dataset/data/ortho")
 dataset_dir = Path(f"{DATASET_LOCATION}/dataset/dataset/data")
 dataset = pd.DataFrame()
+
+# Clears out dataset folder for easier testing
+
+folder = Path("Processed_Data")
+for item in folder.iterdir():
+    if item.is_file():
+        item.unlink()
 
 # Extracting Visual Gait Assessment (VGA) results
 
@@ -43,12 +51,30 @@ for t in dataset_dir.iterdir():
                     end = max(data["leftGaitEvents"][-1][1],data["rightGaitEvents"][-1][1])
                     turn_bounds = data["uturnBoundaries"]
                     if curr_vga == 'Not evaluated':
-                        print(f"{patient} didn't have a VGA evaluation")
+                        # print(f"{patient} didn't have a VGA evaluation")
+                        break
+                    elif data['protocol'] != '10.0m - uturn - 10.0m':
+                        # print(f"{patient} has protocol {data['protocol']} instead of the 10m walk test")
                         break
                     curr_vga = float(curr_vga)
                 lb_imu_data_x = butter_lowpass(imu_data["LB_Gyr_X"],100)
+                copy_x = lb_imu_data_x.copy()
+                mid_bound = int((turn_bounds[1] + 1 - turn_bounds[0])/2)
+                flip = -1 if lb_imu_data_x[mid_bound] < 0 else 1
+                # TODO: Check if flipping makes it hard to generalize on collected data
+                lb_imu_data_x = np.concatenate([lb_imu_data_x[:turn_bounds[0]],
+                                               lb_imu_data_x[turn_bounds[0]:turn_bounds[1] + 1] * flip,
+                                               lb_imu_data_x[turn_bounds[1] + 1:]])
                 lb_imu_data_y = butter_lowpass(imu_data["LB_Gyr_Y"], 100)
+                lb_imu_data_y = np.concatenate([lb_imu_data_y[:turn_bounds[0]],
+                                               lb_imu_data_y[turn_bounds[0]:turn_bounds[1] + 1] * flip,
+                                               lb_imu_data_y[turn_bounds[1] + 1:]])
                 lb_imu_data_z = butter_lowpass(imu_data["LB_Gyr_Z"], 100)
+
+                lb_imu_data_z = np.concatenate([lb_imu_data_z[:turn_bounds[0]],
+                                               lb_imu_data_z[turn_bounds[0]:turn_bounds[1] + 1] * flip,
+                                               lb_imu_data_z[turn_bounds[1] + 1:]])
+
                 stacked_data = np.stack((lb_imu_data_x,lb_imu_data_y,lb_imu_data_z), axis=1)
                 output_path = Path("Processed_Data") / f"{trial.name}.npy"
                 output_path.parent.mkdir(parents=True, exist_ok=True)

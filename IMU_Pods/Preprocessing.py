@@ -5,16 +5,16 @@ from pathlib import Path
 from TUG_data_visualization import dataset_preprocessing, butter_lowpass
 import matplotlib.pyplot as plt
 
-DATASET_LOCATION = "C:/Users/Satvik/Downloads" # Change this as necessary
-healthy_dir = Path(f"{DATASET_LOCATION}/dataset/dataset/data/healthy")
-neuro_dir = Path(f"{DATASET_LOCATION}/dataset/dataset/data/neuro")
-ortho_dir = Path(f"{DATASET_LOCATION}/dataset/dataset/data/ortho")
-dataset_dir = Path(f"{DATASET_LOCATION}/dataset/dataset/data")
+DATASET_LOCATION = "/Users/satvikdronavalli/Downloads" # Change this as necessary
+healthy_dir = Path(f"{DATASET_LOCATION}/dataset/data/healthy")
+neuro_dir = Path(f"{DATASET_LOCATION}/dataset/data/neuro")
+ortho_dir = Path(f"{DATASET_LOCATION}/dataset/data/ortho")
+dataset_dir = Path(f"{DATASET_LOCATION}/dataset/data")
 dataset = pd.DataFrame()
 
 # Clears out dataset folder for easier testing
-
-folder = Path("Processed_Data")
+print(Path.cwd())
+folder = Path("IMU_Pods/Processed_Data")
 for item in folder.iterdir():
     if item.is_file():
         item.unlink()
@@ -24,6 +24,8 @@ for item in folder.iterdir():
 rows = []
 
 for t in dataset_dir.iterdir():
+    print(list(dataset_dir.iterdir()))
+    exit()
     for condition in t.iterdir():
         for item in condition.iterdir():
             patient = item.name

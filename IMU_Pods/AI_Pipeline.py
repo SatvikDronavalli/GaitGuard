@@ -3,7 +3,8 @@ from pathlib import Path
 from sklearn.model_selection import GroupShuffleSplit
 from sklearn.svm import SVC
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Input, Dense, Conv1D, Flatten, Dropout, MaxPooling1D, GlobalAveragePooling1D, LSTM
+from tensorflow.keras.layers import Input, Dense, Conv1D, Flatten, Dropout, MaxPooling1D, GlobalAveragePooling1D, LSTM, Layer, Multiply, Reshape
+
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
 from sklearn.metrics import classification_report,make_scorer, recall_score, roc_auc_score
@@ -14,7 +15,7 @@ import tensorflow as tf
 import statistics
 
 
-curr_path = Path.cwd() / "Processed_Data"
+curr_path = Path.cwd() / "IMU_Pods/Processed_Data"
 
 total = len(list(curr_path.iterdir()))
 
@@ -46,7 +47,7 @@ def resample(norm_val, desired_len):
     return y
 
 
-file_df = pd.read_csv("dataset.csv")
+file_df = pd.read_csv(f"IMU_Pods/dataset.csv")
 
 walk1 = np.array([])
 
@@ -135,6 +136,36 @@ y_true = y_test  # Ground truth labels
 print(classification_report(y_true=y_true,y_pred=y_pred))
 '''
 
+class ChannelAttention1D(Layer):
+    def __init__(self, reduction_ratio=8, **kwargs):
+        super(ChannelAttention1D, self).__init__(**kwargs)
+        self.reduction_ratio = reduction_ratio
+
+    def build(self, input_shape):
+        channel_dim = input_shape[-1]
+        # Bottleneck size
+        reduced_dim = max(channel_dim // self.reduction_ratio, 1)
+        
+        # Shared MLP for channel attention
+        self.dense1 = Dense(reduced_dim, activation='relu', use_bias=True)
+        self.dense2 = Dense(channel_dim, activation='sigmoid', use_bias=True)
+        super(ChannelAttention1D, self).build(input_shape)
+
+    def call(self, inputs):
+        # Global average pooling: shape = (batch, channels)
+        x = GlobalAveragePooling1D()(inputs)
+        # Pass through bottleneck MLP
+        x = self.dense1(x)
+        x = self.dense2(x)
+        # Reshape to multiply with original feature map: (batch, 1, channels)
+        x = Reshape((1, -1))(x)
+        # Multiply attention weights
+        return Multiply()([inputs, x])
+
+    def get_config(self):
+        config = super(ChannelAttention1D, self).get_config()
+        config.update({"reduction_ratio": self.reduction_ratio})
+        return config
 
 
 # -------------------------New triple-conv CNN-SVM----------------------------
@@ -142,14 +173,17 @@ model = Sequential([
     Input(shape=(2000, 9)),
 
     Conv1D(32, kernel_size=7, activation='relu'),  # Broad patterns
+    ChannelAttention1D(),
     MaxPooling1D(2),
     Dropout(0.2),
 
     Conv1D(64, kernel_size=5, activation='relu'),  # Medium patterns
+    ChannelAttention1D(),
     MaxPooling1D(2),
     Dropout(0.2),
 
     Conv1D(128, kernel_size=3, activation='relu'),  # Fine details
+    ChannelAttention1D(),
     MaxPooling1D(2),
     Dropout(0.3),
     GlobalAveragePooling1D(),

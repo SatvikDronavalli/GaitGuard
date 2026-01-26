@@ -7,7 +7,7 @@ from tensorflow.keras.layers import Input, Dense, Conv1D, Flatten, Dropout, MaxP
 
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
-from sklearn.metrics import classification_report,make_scorer, recall_score, roc_auc_score
+from sklearn.metrics import classification_report,make_scorer, recall_score, roc_auc_score, average_precision_score
 from sklearn.model_selection import train_test_split, GridSearchCV
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -15,9 +15,6 @@ import tensorflow as tf
 import statistics
 
 
-curr_path = Path.cwd() / "IMU_Pods/Processed_Data"
-
-total = len(list(curr_path.iterdir()))
 
 bad = 0
 
@@ -47,7 +44,7 @@ def resample(norm_val, desired_len):
     return y
 
 
-file_df = pd.read_csv(f"IMU_Pods/dataset.csv")
+file_df = pd.read_csv(f"dataset.csv")
 
 walk1 = np.array([])
 
@@ -169,40 +166,47 @@ class ChannelAttention1D(Layer):
 
 
 # -------------------------New triple-conv CNN-SVM----------------------------
-model = Sequential([
-    Input(shape=(2000, 9)),
 
-    Conv1D(32, kernel_size=7, activation='relu'),  # Broad patterns
-    ChannelAttention1D(),
-    MaxPooling1D(2),
-    Dropout(0.2),
+def build_model():
+    model = Sequential([
+        Input(shape=(2000, 9)),
 
-    Conv1D(64, kernel_size=5, activation='relu'),  # Medium patterns
-    ChannelAttention1D(),
-    MaxPooling1D(2),
-    Dropout(0.2),
+        Conv1D(32, kernel_size=7, activation='relu'),  # Broad patterns
+        ChannelAttention1D(),
+        MaxPooling1D(2),
+        Dropout(0.2),
 
-    Conv1D(128, kernel_size=3, activation='relu'),  # Fine details
-    ChannelAttention1D(),
-    MaxPooling1D(2),
-    Dropout(0.3),
-    GlobalAveragePooling1D(),
-    Dense(1, activation='sigmoid')
-    # Flatten(),
-    # Dense(128, activation='relu'),
-    # Dropout(0.5),
-    # Dense(64, activation='relu'),
-    # Dense(1, activation='sigmoid')
-])
+        Conv1D(64, kernel_size=5, activation='relu'),  # Medium patterns
+        ChannelAttention1D(),
+        MaxPooling1D(2),
+        Dropout(0.2),
 
-# Compile the model
-model.compile(optimizer=Adam(learning_rate=0.001), loss="binary_crossentropy", metrics=[
-        tf.keras.metrics.BinaryAccuracy(name="accuracy"),
-        tf.keras.metrics.AUC(name="pr_auc", curve="PR"),
-        tf.keras.metrics.AUC(name="roc_auc"),
-        tf.keras.metrics.Recall(name="recall"),
-        tf.keras.metrics.Precision(name="precision"),
+        Conv1D(128, kernel_size=3, activation='relu'),  # Fine details
+        ChannelAttention1D(),
+        MaxPooling1D(2),
+        Dropout(0.3),
+        LSTM(64, return_sequences=True),
+        GlobalAveragePooling1D(),
+        Dense(64, activation='relu', name='embed'), # embedding reduces dimensionality, making features more meaningful for a svm
+        Dense(1, activation='sigmoid')
+        # Flatten(),
+        # Dense(128, activation='relu'),
+        # Dropout(0.5),
+        # Dense(64, activation='relu'),
+        # Dense(1, activation='sigmoid')
     ])
+
+    # Compile the model
+    model.compile(optimizer=Adam(learning_rate=0.001), loss="binary_crossentropy", metrics=[
+            tf.keras.metrics.BinaryAccuracy(name="accuracy"),
+            tf.keras.metrics.AUC(name="pr_auc", curve="PR"),
+            tf.keras.metrics.AUC(name="roc_auc"),
+            tf.keras.metrics.Recall(name="recall"),
+            tf.keras.metrics.Precision(name="precision"),
+        ])
+
+    return model
+
 
 # Define checkpoints and early stopping
 checkpoint = ModelCheckpoint('updated_fall_risk.keras', save_best_only=True, monitor='pr_auc', mode='max')
@@ -211,14 +215,18 @@ early_stopping = EarlyStopping(monitor='pr_auc', patience=5, restore_best_weight
 # Train the model with GRF data and labels
 recall = []
 auc = []
+y_prevalence = None
 for _  in range(5):
+    model = build_model()
+    checkpoint = ModelCheckpoint('updated_fall_risk.keras', save_best_only=True, monitor='pr_auc', mode='max')
+    early_stopping = EarlyStopping(monitor='pr_auc', patience=5, restore_best_weights=True)
     history = model.fit(
         X_train,
         y_train,  # Use actual labels here
         epochs=200,
         batch_size=32,
         callbacks=[checkpoint, early_stopping],
-        verbose = 0
+        verbose = 1
     )
 
     feature_extractor = tf.keras.Model(
@@ -244,15 +252,20 @@ for _  in range(5):
     # --- Step 6: Evaluate ---
     y_pred = svm.predict(features_test)
     y_true = y_test
-    recall.append(recall_score(y_true=y_true, y_pred=y_pred))
-    auc.append(roc_auc_score(y_test, y_pred))
+    y_prevalence = y_true.mean()
+    recall.append(recall_score(y_true=y_true, y_pred=y_pred)) # 0.72
+    y_probs = svm.decision_function(features_test) # 0.816, use this for final metrics
+    pr_auc = average_precision_score(y_test, y_probs)
+    auc.append(pr_auc)
     # print(classification_report(y_true=y_true,y_pred=y_pred))
 
-print(f"Avg recall: {round(sum(recall) / 5, 2)}")
-print(f"Avg AUC: {round(sum(auc) / 5, 3)}")
-print(f"Recall std: {statistics.stdev(recall)}")
-print(f"AUC std: {statistics.stdev(auc)}")
 
+
+print(f"Avg recall: {round(sum(recall) / len(recall), 2)}")
+print(f"Avg PR-AUC: {round(sum(auc) / len(auc), 3)}")
+print(f"Recall std: {statistics.stdev(recall)}")
+print(f"PR-AUC std: {statistics.stdev(auc)}")
+print("PR-AUC / prevalence =", round(sum(auc) / len(auc) / y_prevalence, 3))
 # print(round(avg_roc / 5, 4))
 # print(round(avg_pos_recall / 5, 2)) '''
 
@@ -277,4 +290,10 @@ v14, same architecture, but with turn directions normalized for better consisten
 v15, same architecture, but switched out Global Average Pooling with an LSTM (AUC: 0.576, True recall: 0.42) # overfit A LOT
 v16, same architecture, but stacked the Global Average Pooling layer on top of the LSTM (AUC: 0.728, True recall: 0.69)
 v17, tried initial WearGait-PD architecture with kernel size 9 and the data processing changes (AUC: 0.736, True recall: 0.62)
+v18, used triple-conv architecture with channel attention and improved average metric collection (Avg AUC: 0.731, Avg True recall: 0.68)
+v19, added 64 neuron embedding dense layer to current architecture, commented out channel attention (Avg AUC: 0.756, Avg True Recall: 0.71)
+v20, changed neuron count to 32 (Avg AUC: 0.735, Avg True Recall: 0.68)
+v21, combined embedding dense layer with channel attention (Avg PR-AUC: 0.641, Avg True Recall: 0.77)
+- Baseline triple-conv performance with new average calculations (Avg PR-AUC: 0.605, Avg True Recall: 0.71)
+v22, used prev model but added LSTM (Avg PR-AUC: 0.699, Avg True Recall: 0.75)
 '''

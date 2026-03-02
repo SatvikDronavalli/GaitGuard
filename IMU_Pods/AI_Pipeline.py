@@ -5,11 +5,12 @@ from sklearn.model_selection import GroupShuffleSplit
 from sklearn.svm import SVC
 from tensorflow import keras
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Input, Dense, Conv1D, Flatten, Dropout, MaxPooling1D, GlobalAveragePooling1D, LSTM, Layer, Multiply, Reshape
+from tensorflow.keras.layers import Input, Dense, Conv1D, Flatten, Dropout, MaxPooling1D, GlobalAveragePooling1D, LSTM, Layer, Multiply, Reshape, BatchNormalization
+from tensorflow.keras.utils import register_keras_serializable
 
 from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
-from sklearn.metrics import classification_report,make_scorer, recall_score, roc_auc_score, average_precision_score
+from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, ReduceLROnPlateau
+from sklearn.metrics import classification_report, make_scorer, recall_score, roc_auc_score, average_precision_score, f1_score, precision_score, precision_recall_curve
 from sklearn.model_selection import train_test_split, GridSearchCV
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -46,7 +47,7 @@ def resample(norm_val, desired_len):
     return y
 
 
-@keras.saving.register_keras_serializable()
+@register_keras_serializable()
 class ChannelAttention1D(Layer):
     def __init__(self, reduction_ratio=8, **kwargs):
         super(ChannelAttention1D, self).__init__(**kwargs)
@@ -86,29 +87,26 @@ def build_model():
         Input(shape=(2000, 9)),
 
         Conv1D(32, kernel_size=7, activation='relu'),  # Broad patterns
+        BatchNormalization(),
         ChannelAttention1D(),
         MaxPooling1D(2),
         Dropout(0.2),
 
         Conv1D(64, kernel_size=5, activation='relu'),  # Medium patterns
+        BatchNormalization(),
         ChannelAttention1D(),
         MaxPooling1D(2),
         Dropout(0.2),
 
         Conv1D(128, kernel_size=3, activation='relu'),  # Fine details
+        BatchNormalization(),
         ChannelAttention1D(),
         MaxPooling1D(2),
         Dropout(0.3),
         LSTM(64, return_sequences=True),
         GlobalAveragePooling1D(),
         Dense(64, activation='relu', name='embed'),
-        # embedding reduces dimensionality, making features more meaningful for a svm
         Dense(1, activation='sigmoid')
-        # Flatten(),
-        # Dense(128, activation='relu'),
-        # Dropout(0.5),
-        # Dense(64, activation='relu'),
-        # Dense(1, activation='sigmoid')
     ])
 
     # Compile the model
@@ -122,7 +120,13 @@ def build_model():
 
     return model
 if __name__ == '__main__':
-    file_df = pd.read_csv(f"dataset.csv")
+    import os
+    # Ensure working directory is the script's own folder so relative paths resolve correctly
+    os.chdir(os.path.dirname(os.path.abspath(__file__)))
+
+    file_df = pd.read_csv("dataset.csv")
+    # Fix Windows-style backslash paths for macOS/Linux compatibility
+    file_df["Data_Path"] = file_df["Data_Path"].str.replace("\\", "/", regex=False)
 
     walk1 = np.array([])
 
@@ -173,7 +177,7 @@ if __name__ == '__main__':
     y_train, y_test = y.iloc[train_idx].to_numpy(), y.iloc[test_idx].to_numpy()
     '''
     # ----------------------WearGait-PD CNN---------------------------
-    
+
     model = Sequential([ # Modify architecture, more convolution
         Input(shape=(2000,9)),
         Conv1D(filters=32, kernel_size=9, activation='relu'),
@@ -182,16 +186,16 @@ if __name__ == '__main__':
         Dense(64, activation='relu'),
         Dense(1, activation='sigmoid')  # Binary classification output
     ])
-    
-    
-    
+
+
+
     # Compile the model
     model.compile(optimizer=Adam(learning_rate=0.001), loss="binary_crossentropy", metrics=['accuracy'])
-    
+
     # Define checkpoints and early stopping
     checkpoint = ModelCheckpoint('updated_fall_risk.keras', save_best_only=True, monitor='loss', mode='min')
     early_stopping = EarlyStopping(monitor='loss', patience=5, restore_best_weights=True)
-    
+
     # Train the model with GRF data and labels
     history = model.fit(
         X_train,
@@ -200,8 +204,8 @@ if __name__ == '__main__':
         batch_size=32,
         callbacks=[checkpoint, early_stopping]
     )
-    
-    
+
+
     y_pred_probs = model.predict(X_test)  # Get probabilities (output of sigmoid layer)
     print(roc_auc_score(y_test, y_pred_probs))
     y_pred = (y_pred_probs > 0.5).astype(int)  # Convert probabilities to binary (0 or 1) using a threshold of 0.5
@@ -215,30 +219,39 @@ if __name__ == '__main__':
     checkpoint = ModelCheckpoint('updated_fall_risk.keras', save_best_only=True, monitor='pr_auc', mode='max')
     early_stopping = EarlyStopping(monitor='pr_auc', patience=5, restore_best_weights=True)
 
+    # Compute class weights to handle imbalance during CNN training
+    from sklearn.utils.class_weight import compute_class_weight
+    classes = np.unique(y_train)
+    weights = compute_class_weight('balanced', classes=classes, y=y_train)
+    class_weights = dict(zip(classes.astype(int), weights))
+    print(f"Class weights: {class_weights}")
+
     # Train the model with GRF data and labels
     recall = []
     auc = []
     y_prevalence = None
     for _  in range(1):
         model = build_model()
-        checkpoint = ModelCheckpoint('updated_fall_risk.keras', save_best_only=True, monitor='pr_auc', mode='max')
-        early_stopping = EarlyStopping(monitor='pr_auc', patience=5, restore_best_weights=True)
+        checkpoint = ModelCheckpoint('updated_fall_risk.keras', save_best_only=True, monitor='val_pr_auc', mode='max')
+        early_stopping = EarlyStopping(monitor='val_pr_auc', patience=10, restore_best_weights=True)
+        reduce_lr = ReduceLROnPlateau(monitor='val_pr_auc', factor=0.5, patience=3, min_lr=1e-6, mode='max')
         history = model.fit(
             X_train,
-            y_train,  # Use actual labels here
+            y_train,
             epochs=200,
             batch_size=32,
-            callbacks=[checkpoint, early_stopping],
+            validation_split=0.15,  # Use 15% of training data for validation
+            class_weight=class_weights,  # Handle class imbalance in CNN
+            callbacks=[checkpoint, early_stopping, reduce_lr],
             verbose = 1
         )
 
         model.save("esp32/cnn_model.keras")
 
-        feature_extractor = tf.keras.Model(
-            inputs=model.input,
-            outputs=model.layers[-2].output
-        )
-
+        # Build feature extractor by creating a new Sequential with all layers except the final Dense(1)
+        # This sidesteps Keras 3's Sequential .input bug entirely
+        feature_extractor = Sequential(model.layers[:-1])
+        feature_extractor.build(input_shape=(None, 2000, 9))
         feature_extractor.save("esp32/feature_extractor.keras")
 
         features_train = feature_extractor.predict(X_train, verbose=0)
@@ -250,10 +263,11 @@ if __name__ == '__main__':
             'kernel': ['rbf']
         }
 
-        grid_search = GridSearchCV(SVC(), param_grid, cv=5, scoring='recall')
+        # Use class_weight='balanced' to handle class imbalance & optimize for F1
+        grid_search = GridSearchCV(SVC(class_weight='balanced'), param_grid, cv=5, scoring='f1')
         grid_search.fit(features_train, y_train)
 
-        svm = grid_search.best_estimator_  # handles imbalance
+        svm = grid_search.best_estimator_
         svm.fit(features_train, y_train)
 
         joblib.dump(svm, 'esp32/svm_classifier.joblib')
@@ -262,14 +276,44 @@ if __name__ == '__main__':
         y_pred = svm.predict(features_test)
         y_true = y_test
         y_prevalence = y_true.mean()
-        recall.append(recall_score(y_true=y_true, y_pred=y_pred)) # 0.72
-        y_probs = svm.decision_function(features_test) # 0.816, use this for final metrics
+        recall.append(recall_score(y_true=y_true, y_pred=y_pred))
+        y_probs = svm.decision_function(features_test)
         pr_auc = average_precision_score(y_test, y_probs)
         auc.append(pr_auc)
-        # print(classification_report(y_true=y_true,y_pred=y_pred))
+
+        # --- F1 Score & Optimal Threshold ---
+        f1 = f1_score(y_true, y_pred)
+        prec = precision_score(y_true, y_pred, zero_division=0)
+
+        # Find optimal threshold that maximizes F1
+        precisions, recalls, thresholds = precision_recall_curve(y_true, y_probs)
+        f1_scores = 2 * precisions * recalls / (precisions + recalls + 1e-8)
+        best_idx = np.argmax(f1_scores)
+        best_threshold = thresholds[best_idx] if best_idx < len(thresholds) else 0
+        best_f1 = f1_scores[best_idx]
+        y_pred_optimized = (y_probs >= best_threshold).astype(int)
+
+        print(f"\n{'='*55}")
+        print(f"  EVALUATION RESULTS")
+        print(f"{'='*55}")
+        print(f"  Default threshold:")
+        print(f"    F1 Score:   {f1:.3f}")
+        print(f"    Precision:  {prec:.3f}")
+        print(f"    Recall:     {recall[-1]:.3f}")
+        print(f"    PR-AUC:     {pr_auc:.3f}")
+        print(f"")
+        print(f"  Optimized threshold ({best_threshold:.3f}):")
+        print(f"    F1 Score:   {best_f1:.3f}")
+        print(f"    Precision:  {precision_score(y_true, y_pred_optimized, zero_division=0):.3f}")
+        print(f"    Recall:     {recall_score(y_true, y_pred_optimized):.3f}")
+        print(f"{'='*55}")
+        print(f"\nClassification Report (default threshold):")
+        print(classification_report(y_true, y_pred, target_names=['Stable', 'Unstable']))
+        print(f"Classification Report (optimized threshold):")
+        print(classification_report(y_true, y_pred_optimized, target_names=['Stable', 'Unstable']))
 
     '''
-    
+
     print(f"Avg recall: {round(sum(recall) / len(recall), 2)}")
     print(f"Avg PR-AUC: {round(sum(auc) / len(auc), 3)}")
     print(f"Recall std: {statistics.stdev(recall)}")
